@@ -165,7 +165,8 @@ namespace LossMaker
 
                     //Handle getting purchase prices into searchable systems
                     if (price.BuyPrice.GetValueOrDefault(int.MaxValue) > minLoss && //can't make a loss if buying for less than the loss amount... this greatly reduces our memory consumption
-                        toInclude.ContainsKey(price.StationId))
+                        toInclude.ContainsKey(price.StationId) &&
+                        toInclude[price.StationId].max_landing_pad_size == "L") // gotta dock the conda...
                     {
                         toInclude[price.StationId].Prices.Add(price.CommodityId, price);
                         releventPrices++;
