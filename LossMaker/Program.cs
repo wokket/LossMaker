@@ -80,7 +80,7 @@ namespace LossMaker
 
             foreach (var loss in top5LossesPerCommodity)
             {
-                Console.WriteLine($"    ({loss.Loss}cr/t loss) Purchase {loss.Commodity} at {loss.PurchaseStation.SystemName}:{loss.PurchaseStation.name} ({loss.PurchaseStation.max_landing_pad_size} pad) for {loss.Price.BuyPrice}cr/t, sell for {loss.SellPrice}");
+                Console.WriteLine($"    ({loss.Loss}cr/t loss) Purchase {loss.Commodity} at {loss.PurchaseStation.SystemName} ({loss.PurchaseStation.DistanceToSystem}ly) : {loss.PurchaseStation.name} ({loss.PurchaseStation.distance_to_star}ls, {loss.PurchaseStation.max_landing_pad_size} pad) for {loss.Price.BuyPrice}cr/t, sell for {loss.SellPrice}");
             }
 
 
@@ -116,14 +116,17 @@ namespace LossMaker
             using (var reader = new StreamReader(File.OpenRead("stations.json")))
             {
                 var data = JSON.Deserialize<List<Station>>(reader)
-                    .Where(x => x.system_id.HasValue && toInclude.ContainsKey(x.system_id.Value))
+                    .Where(x => x.system_id.HasValue
+                                && toInclude.ContainsKey(x.system_id.Value)
+                                && x.max_landing_pad_size == "L")
                     .Select(x =>
                     {
                         x.SystemName = toInclude[x.system_id.Value].name;
+                        x.DistanceToSystem = toInclude[x.system_id.Value].distance;
                         return KeyValuePair.Create(x.id.Value, x);
                     });
 
-                Console.WriteLine($"   Found {data.Count()} stations in those systems...");
+                Console.WriteLine($"   Found {data.Count()} stations with large pads in those systems...");
                 return new Dictionary<int, Station>(data);
             }
         }
@@ -139,7 +142,10 @@ namespace LossMaker
                     .Where(x => x.edsm_id.HasValue && x.id.HasValue &&
                     (toInclude.ContainsKey(x.edsm_id.Value) || //in our set of in-range systems
                      x.name == targetSystem)) // Our destination
-                    .Select(x => KeyValuePair.Create(x.id.Value, x));
+                    .Select(x => {
+                        x.distance = toInclude[x.edsm_id.Value].Distance;
+                        return KeyValuePair.Create(x.id.Value, x);
+                        });
 
                 return new Dictionary<int, EddbSystem>(data);
             }
@@ -165,8 +171,7 @@ namespace LossMaker
 
                     //Handle getting purchase prices into searchable systems
                     if (price.BuyPrice.GetValueOrDefault(int.MaxValue) > minLoss && //can't make a loss if buying for less than the loss amount... this greatly reduces our memory consumption
-                        toInclude.ContainsKey(price.StationId) &&
-                        toInclude[price.StationId].max_landing_pad_size == "L") // gotta dock the conda...
+                        toInclude.ContainsKey(price.StationId))
                     {
                         toInclude[price.StationId].Prices.Add(price.CommodityId, price);
                         releventPrices++;
