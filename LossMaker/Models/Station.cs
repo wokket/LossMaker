@@ -37,6 +37,7 @@ namespace LossMaker.Models
         /// </summary>
         public Dictionary<int, Price> Prices { get;  }
         public string SystemName { get; internal set; }
+        public float? DistanceToSystem { get; internal set; }
     }
 
 }
