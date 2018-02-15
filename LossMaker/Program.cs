@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CsvHelper;
 using Flurl;
@@ -30,6 +31,8 @@ namespace LossMaker
             var minLoss = 600;
             var lyRadius = 400;
 
+            await DownloadFilesIfRequired();
+
             var inRange = await GetSystemsInSphereAround(targetSystem, lyRadius);
 
             var commodityData = GetCommodityData();
@@ -43,6 +46,40 @@ namespace LossMaker
             FindLargestLossTrades(stations, targetMarketPrices, commodityData, minLoss);
 
 
+        }
+
+        private static async Task DownloadFilesIfRequired()
+        {
+            var downloadRequired = false;
+            const string DataFileName = "listings.csv";
+
+            if (!File.Exists(DataFileName))
+            {
+                Console.WriteLine("No market data found, downloading...");
+                downloadRequired = true;
+            }
+            else
+            {
+                var createDate = File.GetCreationTime(DataFileName);
+                if (createDate < DateTime.Now.Subtract(TimeSpan.FromDays(1)))
+                {
+                    Console.WriteLine("Market data is stale,  re-downloading...");
+                    downloadRequired = true;
+                    File.Delete(DataFileName);
+                }
+            }
+
+            if (downloadRequired)
+            {
+
+                const string url = "https://eddb.io/archive/v5/listings.csv";
+
+                using (var progress = new ConsoleProgressBar())
+                {
+                    await FileDownloader.DownloadFileAsync(url, DataFileName, progress, CancellationToken.None);
+                }
+                Console.WriteLine("  Download complete.");
+            }
         }
 
         private static void FindLargestLossTrades(Dictionary<int, Station> stations, Dictionary<int, Price> targetMarketPrices, List<Commodity> commodityData, int minLoss)
@@ -105,9 +142,6 @@ namespace LossMaker
                 Console.WriteLine($"   Found {values.Count()} populated systems in range...");
                 return new Dictionary<int, EdsmSystem>(values);
             }
-
-
-
         }
 
         private static Dictionary<int, Station> GetStationData(Dictionary<int, EddbSystem> toInclude)
@@ -142,16 +176,17 @@ namespace LossMaker
                     .Where(x => x.edsm_id.HasValue && x.id.HasValue &&
                     (toInclude.ContainsKey(x.edsm_id.Value) || //in our set of in-range systems
                      x.name == targetSystem)) // Our destination
-                    .Select(x => {
+                    .Select(x =>
+                    {
                         x.distance = toInclude[x.edsm_id.Value].Distance;
                         return KeyValuePair.Create(x.id.Value, x);
-                        });
+                    });
 
                 return new Dictionary<int, EddbSystem>(data);
             }
         }
 
-        private static Dictionary<int,Price> GetPriceData(Dictionary<int, Station> toInclude, int minLoss)
+        private static Dictionary<int, Price> GetPriceData(Dictionary<int, Station> toInclude, int minLoss)
         {
             //This method is highly performance sensitive!
 
@@ -179,7 +214,7 @@ namespace LossMaker
 
 
                     //if for the target system
-                    if(price.StationId == TargetStation.system_id)
+                    if (price.StationId == TargetStation.system_id)
                     {
                         returnValue.Add(price.CommodityId, price);
                     }
