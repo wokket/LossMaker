@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using CsvHelper;
@@ -15,6 +16,8 @@ namespace LossMaker
     class Program
     {
         private static Station TargetStation;
+        private static readonly string FilePath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+
 
         static void Main(string[] args)
         {
@@ -28,8 +31,8 @@ namespace LossMaker
         {
             var targetSystem = "G 141-21";
             var targetStation = "Scithers Hub";
-            var minLoss = 600;
-            var lyRadius = 400;
+            var minLoss = 350;
+            var lyRadius = 40;
 
             await DownloadFilesIfRequired();
 
@@ -50,35 +53,42 @@ namespace LossMaker
 
         private static async Task DownloadFilesIfRequired()
         {
-            var downloadRequired = false;
-            const string DataFileName = "listings.csv";
+            await DownloadFileImpl("commodities.json", "https://eddb.io/archive/v5/commodities.json"); // 100k
+            await DownloadFileImpl("stations.json", "https://eddb.io/archive/v5/stations.json"); // 112Mb
+            await DownloadFileImpl("systems_populated.json", "https://eddb.io/archive/v5/systems_populated.json"); //21Mb
+            await DownloadFileImpl("listings.csv", "https://eddb.io/archive/v5/listings.csv"); //141Mb
+        }
 
-            if (!File.Exists(DataFileName))
+        private static async Task DownloadFileImpl(string DataFileName, string url)
+        {
+
+            var fullPathToDataFile = Path.Combine(FilePath, DataFileName);
+
+            var downloadRequired = false;
+            if (!File.Exists(fullPathToDataFile))
             {
-                Console.WriteLine("No market data found, downloading...");
+                Console.WriteLine($"{DataFileName} not found, downloading...");
                 downloadRequired = true;
             }
             else
             {
-                var createDate = File.GetCreationTime(DataFileName);
+                var createDate = File.GetCreationTime(fullPathToDataFile);
                 if (createDate < DateTime.Now.Subtract(TimeSpan.FromDays(1)))
                 {
-                    Console.WriteLine("Market data is stale,  re-downloading...");
+                    Console.WriteLine($"{DataFileName} is stale,  re-downloading...");
                     downloadRequired = true;
-                    File.Delete(DataFileName);
+                    File.Delete(fullPathToDataFile);
                 }
             }
 
             if (downloadRequired)
             {
 
-                const string url = "https://eddb.io/archive/v5/listings.csv";
-
                 using (var progress = new ConsoleProgressBar())
                 {
-                    await FileDownloader.DownloadFileAsync(url, DataFileName, progress, CancellationToken.None);
+                    await FileDownloader.DownloadFileAsync(url, fullPathToDataFile, progress, CancellationToken.None);
                 }
-                Console.WriteLine("  Download complete.");
+                Console.WriteLine("   Download complete.");
             }
         }
 
@@ -147,7 +157,7 @@ namespace LossMaker
         private static Dictionary<int, Station> GetStationData(Dictionary<int, EddbSystem> toInclude)
         {
             Console.WriteLine("Loading Station data...");
-            using (var reader = new StreamReader(File.OpenRead("stations.json")))
+            using (var reader = new StreamReader(File.OpenRead(Path.Combine(FilePath, "stations.json"))))
             {
                 var data = JSON.Deserialize<List<Station>>(reader)
                     .Where(x => x.system_id.HasValue
@@ -169,7 +179,7 @@ namespace LossMaker
         {
             Console.WriteLine("Loading System data...");
 
-            using (var reader = new StreamReader(File.OpenRead("systems_populated.json")))
+            using (var reader = new StreamReader(File.OpenRead(Path.Combine(FilePath, "systems_populated.json"))))
             {
 
                 var data = JSON.Deserialize<List<EddbSystem>>(reader)
@@ -194,7 +204,7 @@ namespace LossMaker
 
             var returnValue = new Dictionary<int, Price>(50);
 
-            using (var reader = new StreamReader(File.OpenRead("listings.csv")))
+            using (var reader = new StreamReader(File.OpenRead(Path.Combine(FilePath, "listings.csv"))))
             {
                 var parser = new CsvReader(reader);
                 parser.Configuration.RegisterClassMap<PriceMap>();
@@ -229,7 +239,7 @@ namespace LossMaker
         private static List<Commodity> GetCommodityData()
         {
             Console.WriteLine("Loading commodity data...");
-            using (var reader = new StreamReader(File.OpenRead("commodities.json")))
+            using (var reader = new StreamReader(File.OpenRead(Path.Combine(FilePath, "commodities.json"))))
             {
                 return JSON.Deserialize<List<Commodity>>(reader);
             }

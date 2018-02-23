@@ -6,14 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="commodities.json" />
     <None Remove="listings.csv" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Include="commodities.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
   </ItemGroup>
 
   <ItemGroup>
